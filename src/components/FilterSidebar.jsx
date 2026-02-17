@@ -21,8 +21,7 @@ const FilterSidebar = ({ onFilterChange }) => {
   const [targetAreas, setTargetAreas] = useState([]);
   const [styles, setStyles] = useState([]);
   const [preferences, setPreferences] = useState([]);
-  const { availableColors } = useProducts(); 
-
+  const { availableColors = [] } = useProducts();  // Default to empty array if undefined
 
   const toggleSection = (key) => {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -41,7 +40,6 @@ const FilterSidebar = ({ onFilterChange }) => {
     });
   };
 
-  // ✅ handle toggle for checkbox lists
   const handleToggle = (item, list, setList, key) => {
     const updated = list.includes(item)
       ? list.filter((i) => i !== item)
@@ -159,25 +157,23 @@ const FilterSidebar = ({ onFilterChange }) => {
           <strong>Color</strong>
           {expanded.color ? <FaChevronUp /> : <FaChevronDown />}
         </div>
-       {expanded.color && (
-        <div className="d-flex flex-wrap gap-2 mt-2">
-          {availableColors.map((color) => (
-
-            // console.log("colorssss from filter",availableColors),
-            <button
-              key={color}
-              className={`btn btn-sm ${
-                selectedColors.includes(color)
-                  ? "btn-danger"
-                  : "btn-outline-danger"
-              }`}
-              onClick={() => handleColorSelect(color)}
-            >
-              {color}
-            </button>
-          ))}
-        </div>
-      )}
+        {expanded.color && (
+          <div className="d-flex flex-wrap gap-2 mt-2">
+            {availableColors.map((color) => (
+              <button
+                key={color}
+                className={`btn btn-sm ${
+                  selectedColors.includes(color)
+                    ? "btn-danger"
+                    : "btn-outline-danger"
+                }`}
+                onClick={() => handleColorSelect(color)}
+              >
+                {color}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Compression Level */}
@@ -202,95 +198,6 @@ const FilterSidebar = ({ onFilterChange }) => {
                   }
                 />
                 <label className="form-check-label">{level}</label>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Target Area */}
-      <div className="mb-3">
-        <div
-          className="d-flex justify-content-between align-items-center"
-          onClick={() => toggleSection("target")}
-        >
-          <strong>Target Area</strong>
-          {expanded.target ? <FaChevronUp /> : <FaChevronDown />}
-        </div>
-        {expanded.target && (
-          <div className="mt-2">
-            {[
-              "Bust",
-              "Waist",
-              "Tummy",
-              "Thigh",
-              "Butt",
-              "All day bra",
-            ].map((t) => (
-              <div className="form-check" key={t}>
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={targetAreas.includes(t)}
-                  onChange={() =>
-                    handleToggle(t, targetAreas, setTargetAreas, "targetAreas")
-                  }
-                />
-                <label className="form-check-label">{t}</label>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Style */}
-      <div className="mb-3">
-        <div
-          className="d-flex justify-content-between align-items-center"
-          onClick={() => toggleSection("style")}
-        >
-          <strong>Style</strong>
-          {expanded.style ? <FaChevronUp /> : <FaChevronDown />}
-        </div>
-        {expanded.style && (
-          <div className="mt-2">
-            {["T-Shirt Bra", "Bralette", "Sports Bra", "Cotton Bra", "Lace Bra"].map((s) => (
-              <div className="form-check" key={s}>
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={styles.includes(s)}
-                  onChange={() => handleToggle(s, styles, setStyles, "styles")}
-                />
-                <label className="form-check-label">{s}</label>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Preference */}
-      <div className="mb-3">
-        <div
-          className="d-flex justify-content-between align-items-center"
-          onClick={() => toggleSection("preference")}
-        >
-          <strong>Preference</strong>
-          {expanded.preference ? <FaChevronUp /> : <FaChevronDown />}
-        </div>
-        {expanded.preference && (
-          <div className="mt-2">
-            {["Padded", "Non Padded", "Wired", "Non Wired"].map((pref) => (
-              <div className="form-check" key={pref}>
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={preferences.includes(pref)}
-                  onChange={() =>
-                    handleToggle(pref, preferences, setPreferences, "preferences")
-                  }
-                />
-                <label className="form-check-label">{pref}</label>
               </div>
             ))}
           </div>

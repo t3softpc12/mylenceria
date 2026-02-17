@@ -1,117 +1,168 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import axios from "axios";
+import { useAuth } from "./AuthContext";  // Assuming you already have AuthContext
 
 const ProductContext = createContext();
 
 const CATEGORY_API_URL = import.meta.env.VITE_FETCH_CATEGORY;
-const PRODUCT_API_URL = import.meta.env.VITE_FETCH_PRODUCTS;
+// const PRODUCT_API_URL = import.meta.env.VITE_CATEGORY_WISE_PRODUCTS;
+
+const PARENT_API = import.meta.env.VITE_FETCH_PARENT_PRODUCTS;
+const VARIANT_API = import.meta.env.VITE_FETCH_CHILD_VARIANTS;
 
 export const ProductProvider = ({ children }) => {
-  const [parents, setParents] = useState([]);       // parent products (configurable)
-  const [productMap, setProductMap] = useState({}); // parent_id → children[]
-  const [categories, setCategories] = useState([]);
-  const [availableColors, setAvailableColors] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [parents, setParents] = useState([]);  // Parent products (configurable)
+  const [productMap, setProductMap] = useState({});  // Parent ID -> Children[]
+  const [categories, setCategories] = useState([]);  // Categories from API
+  const [selectedCategory, setSelectedCategory] = useState("");  // Selected category
+  const [availableColors, setAvailableColors] = useState([]);  // Colors for filtering
+  const { user } = useAuth();  // Get user from AuthContext
+  const [searchMode, setSearchMode] = useState(false);     // Are we in search results mode?
+  const [searchTerm, setSearchTerm] = useState("");       // Current search keyword
+  const [searchParents, setSearchParents] = useState([]); //
 
-  // Extract color from product name
-  const COLOR_WORDS = [
-    "White","Black","Red","Blue","Denim Blue","Denim","Pink","Green",
-    "Yellow","Beige","Brown","Purple","Maroon","Navy","Sky Blue",
-    "Grey","Gray","Orange","Cream","Lavender"
-  ];
+const [variants, setVariants] = useState([]);
+const [loading, setLoading] = useState(false);
 
-  function extractColor(name) {
-    if (!name) return null;
+useEffect(() => {
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(CATEGORY_API_URL);
+      // console.log("Raw categories from API:", response.data);
+      setCategories(response.data);   // ← array of objects
 
-    const lower = name.toLowerCase();
-
-    for (let c of COLOR_WORDS.sort((a, b) => b.length - a.length)) {
-      if (lower.includes(c.toLowerCase())) {
-        return c;
-      }
+    } catch (err) {
+      console.error("Error fetching categories:", err);
     }
-    return null;
+  };
+  fetchCategories();
+}, []);
+
+
+  const fetchParents = async (category) => {
+  setLoading(true);
+  const res = await axios.get(PARENT_API, {
+    params: { category }
+  });
+  setParents(res.data.products || []);
+  setLoading(false);
+};
+
+const fetchVariants = async (parentId, size = "", color = "") => {
+  try {
+    setLoading(true);
+    const res = await axios.get(VARIANT_API, {
+      params: { parent_id: parentId, size, color }
+    });
+    
+    const variants = res.data.variants || [];
+    
+    // Merge into productMap (don't overwrite unrelated parents)
+    setProductMap(prev => ({
+      ...prev,
+      [parentId]: variants,
+    }));
+    
+    return variants;
+  } catch (err) {
+    console.error("fetchVariants error:", err);
+    return [];
+  } finally {
+    setLoading(false);
   }
+};
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const productResponse = await axios.get(PRODUCT_API_URL);
-        const categoryResponse = await axios.get(CATEGORY_API_URL);
 
-        const productData = productResponse.data;
+// const fetchVariants = async (parentId, size = "", color = "") => {
+//   console.log(`[fetchVariants] START - parentId: ${parentId} | size: "${size}" | color: "${color}"`);
 
-        // Convert API object to array of parents
-        const parentList = Object.values(productData).map((p) => p.parent);
+//   setLoading(true);
+//   try {
+//     const res = await axios.get(VARIANT_API, {
+//       params: { parent_id: parentId, size, color }
+//     });
 
-        // Map children to each parent_id
-        const mapChildren = {};
-        Object.entries(productData).forEach(([parentId, item]) => {
-          const processed = item.children.map((child) => ({
-            ...child,
-            color: extractColor(child.productname), // auto color detection
-            // color: child.color || null
-          }));
-          mapChildren[parentId] = processed;
-        });
+//     console.log(`[fetchVariants] RESPONSE STATUS: ${res.status}`);
+//     console.log(`[fetchVariants] RAW DATA:`, res.data);
 
-        // console.log("Parent list", parentList);
-        let colorSet = new Set();
+//     const variants = res.data.variants || res.data || []; // fallback if structure varies
 
-        Object.values(mapChildren).forEach(childrenList => {
-          childrenList.forEach(child => {
-            if (child.color) colorSet.add(child.color);
-          });
-        });
+//     console.log(`[fetchVariants] PARSED VARIANTS COUNT: ${variants.length}`);
+//     if (variants.length > 0) {
+//       console.log(`[fetchVariants] First variant example:`, variants[0]);
+//     }
 
-        setAvailableColors([...colorSet]);
+//     // Use String key to avoid number/string issues
+//     const key = String(parentId);
+//     setProductMap(prev => {
+//       const newMap = {
+//         ...prev,
+//         [key]: variants,
+//       };
+//       console.log(`[fetchVariants] Updated productMap for ${key} → ${variants.length} items`);
+//       console.log(`[fetchVariants] Current productMap keys:`, Object.keys(newMap));
+//       return newMap;
+//     });
 
-        setParents(parentList);     // store parents only
-        setProductMap(mapChildren); // parentId → children[]
-        setCategories(categoryResponse.data);
+//     return variants;
+//   } catch (err) {
+//     console.error(`[fetchVariants] ERROR for ${parentId}:`, err.message);
+//     if (err.response) {
+//       console.error("[fetchVariants] Response status/data:", err.response.status, err.response.data);
+//     }
+//     return [];
+//   } finally {
+//     setLoading(false);
+//   }
+// };
 
-      } catch (err) {
-        console.error("Error fetching product data:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    fetchData();
-  }, []);
 
-  // Get parent by ID
-  const getProductById = (id) =>
-    parents.find((p) => p.productid === String(id)) || null;
+useEffect(() => {
+  if (selectedCategory) {
+    fetchParents(selectedCategory);
+  }
+}, [selectedCategory]);
 
-  // Get children SKUs for a parent ID
-  const getChildrenByParentId = (id) =>
-    productMap[id] || [];
 
-  // Get sizes for a parent product
-  const getSizes = (id) =>
-    [...new Set((productMap[id] || []).map((c) => c.size))];
 
-  // Get colors available for a parent product
-  const getColors = (id) =>
-    [...new Set((productMap[id] || []).map((c) => c.color).filter(Boolean))];
+// const onVariantSelect = (parentId, size, color) => {
+//   fetchVariants(parentId, size, color);
+// };
+
+
 
   return (
-    <ProductContext.Provider
-      value={{
-        parents,
-        productMap,
-        categories,
-        loading,
-        getProductById,
-        getChildrenByParentId,
-        getSizes,
-        getColors,
-        availableColors, 
-      }}
-    >
-      {children}
-    </ProductContext.Provider>
+
+
+
+<ProductContext.Provider value={{
+  parents,
+  setParents,               // optional but useful
+  productMap,
+  setProductMap,
+  variants,                 // if still needed
+  categories,
+  selectedCategory,
+  setSelectedCategory,
+  loading,
+  fetchParents,
+  fetchVariants,
+
+  // ── Add these ──
+  searchMode,
+  setSearchMode,
+  searchTerm,
+  setSearchTerm,
+  searchParents,
+  setSearchParents,
+
+}}>
+  {children}
+</ProductContext.Provider>
+
+
+
   );
 };
 

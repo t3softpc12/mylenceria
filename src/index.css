@@ -5,9 +5,9 @@
   padding: 0;
 }
 
-body{
+/* body{
   padding-top: 130px;
-}
+} */
 
 /* Hero Carousel */
 .hero-carousel img {
@@ -372,13 +372,7 @@ main, .carousel, .hero-banner, .banner, .carousel-item {
   cursor: pointer;
 }
 
-.color-circle {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid #ccc;
-  cursor: pointer;
-}
+
 
 .form-check-label {
   cursor: pointer;
@@ -409,11 +403,13 @@ main, .carousel, .hero-banner, .banner, .carousel-item {
 }
 
 .color-circle {
-  width: 26px;
-  height: 26px;
+  width: 3vw;
+  height: 3vw;
   border-radius: 50%;
   cursor: pointer;
   transition: 0.2s ease-in-out;
+  background-size: cover;
+  background-position: center;
 }
 
 .color-circle:hover {

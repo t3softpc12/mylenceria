@@ -1,180 +1,111 @@
-import React, { useState } from "react";
-import { Container, Row, Col, Form, Button, Alert, Card } from "react-bootstrap";
-import { useNavigate } from "react-router-dom";
-import { FaEdit } from "react-icons/fa";
+import React, { useEffect, useState } from "react";
+import { Container, Row, Col, ListGroup, Button } from "react-bootstrap";
+import { FaChevronRight } from "react-icons/fa";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import ProfileSection from '../components/ProfileSections/ProfileSection';
+import AddressSection from '../components/ProfileSections/AddressSection';
+import DownloadSection from '../components/ProfileSections/DownloadSection';
+import OrderSection from '../components/ProfileSections/OrderSection';
+import WishlistSection from "../components/ProfileSections/WishlistSection";
+
+// Sidebar Menu
+const menuItems = [
+  { key: "profile", label: "Profile" },
+  { key: "orders", label: "Your Orders" },
+  { key: "wishlist", label: "Wishlist" },
+  { key: "address", label: "Saved Address" },
+  { key: "downloads", label: "Downloadable Products" },
+];
 
 const ProfilePage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionFromUrl = searchParams.get("section") || "profile";
+  const [activeSection, setActiveSection] = useState(sectionFromUrl);
 
-  // States for profile details
-  const [userDetails, setUserDetails] = useState({
-    name: "Jimmy",
-    email: "john@example.com",
-    phone: "",
-    password: "",
-    confirmPassword: "",
-  });
-
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-
-  // Handle input change
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setUserDetails((prevState) => ({
-      ...prevState,
-      [name]: value,
-    }));
-  };
-
-  // Handle form submission
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    // Validate password fields
-    if (userDetails.password !== userDetails.confirmPassword) {
-      setError("Passwords do not match.");
-      return;
+  useEffect(() => {
+    if (sectionFromUrl !== activeSection) {
+      setActiveSection(sectionFromUrl);
     }
+  }, [sectionFromUrl]);
 
-    // Simulate API call to update user details
-    setTimeout(() => {
-      localStorage.setItem("userDetails", JSON.stringify(userDetails)); // Save updated details in localStorage
-      setSuccessMessage("Profile updated successfully.");
-      setError(""); // Clear any previous errors
-    }, 1000);
+  const updateSection = (sectionKey) => {
+    setActiveSection(sectionKey);
+    setSearchParams({ section: sectionKey });
   };
 
   return (
-    <Container className="my-4">
+    <Container fluid  className="px-5 mt-4" style={{ minHeight: "100vh" }}>
       <Row>
-        <Col md={3} className="d-none d-md-block">
-          {/* Sidebar Navigation */}
-          <div className="list-group">
-            <div className="list-group-item bg-dark text-white">My Account</div>
-            <a href="/profile" className="list-group-item list-group-item-action">
-              Profile
-            </a>
-            <a href="/address" className="list-group-item list-group-item-action">
-              Address
-            </a>
-            <a href="/orders" className="list-group-item list-group-item-action">
-              Orders
-            </a>
-            <a href="/downloads" className="list-group-item list-group-item-action">
-              Downloadable Products
-            </a>
+        {/* Sidebar */}
+        <Col md={3} className="mb-4">
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "12px",
+              padding: "0",
+              boxShadow: "0px 2px 10px rgba(0,0,0,0.06)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                background: "#110d0cff",
+                color: "#fff",
+                padding: "15px",
+                fontWeight: 600,
+                fontSize: "16px",
+              }}
+            >
+              My Account
+            </div>
+
+            <ListGroup variant="flush">
+              {menuItems.map((item) => {
+                const active = activeSection === item.key;
+
+                return (
+                  <ListGroup.Item
+                    key={item.key}
+                    onClick={() => updateSection(item.key)}
+                    style={{
+                      cursor: "pointer",
+                      backgroundColor: active ? "#FFF2F0" : "#fff",
+                      color: active ? "#000000ff" : "#5a3939ff",
+                      borderBottom: "1px solid #eee",
+                      fontWeight: active ? 600 : 500,
+                      padding: "12px 14px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    {item.label}
+                    <FaChevronRight size={12} />
+                  </ListGroup.Item>
+                );
+              })}
+            </ListGroup>
           </div>
         </Col>
 
+        {/* Main Content */}
         <Col md={9}>
-          <Card>
-            <Card.Body>
-              <h2 className="text-center mb-4">Profile</h2>
-
-              {/* Success Message */}
-              {successMessage && (
-                <Alert variant="success" onClose={() => setSuccessMessage("")} dismissible>
-                  {successMessage}
-                </Alert>
-              )}
-
-              {/* Error Message */}
-              {error && (
-                <Alert variant="danger" onClose={() => setError("")} dismissible>
-                  {error}
-                </Alert>
-              )}
-
-              {/* Profile Details */}
-              <Row>
-                <Col md={6}>
-                  <div className="d-flex justify-content-between align-items-center">
-                    <h4 className="mb-3">Hello! {userDetails.name}</h4>
-                    <Button variant="link" className="p-0" onClick={() => navigate("/edit-profile")}>
-                      <FaEdit /> Edit
-                    </Button>
-                  </div>
-                  <p className="text-muted">{userDetails.email}</p>
-                </Col>
-              </Row>
-
-              {/* Profile Form */}
-              <Form onSubmit={handleSubmit}>
-                <Form.Group controlId="formName">
-                  <Form.Label>Full Name</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter your full name"
-                    name="name"
-                    value={userDetails.name}
-                    onChange={handleChange}
-                    required
-                  />
-                </Form.Group>
-
-                <Form.Group controlId="formEmail" className="mt-3">
-                  <Form.Label>Email Address</Form.Label>
-                  <Form.Control
-                    type="email"
-                    placeholder="Enter your email"
-                    name="email"
-                    value={userDetails.email}
-                    onChange={handleChange}
-                    required
-                    disabled
-                  />
-                </Form.Group>
-
-                <Form.Group controlId="formPhone" className="mt-3">
-                  <Form.Label>Phone Number</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter your phone number"
-                    name="phone"
-                    value={userDetails.phone}
-                    onChange={handleChange}
-                  />
-                </Form.Group>
-
-                <Form.Group controlId="formPassword" className="mt-3">
-                  <Form.Label>Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    placeholder="Enter new password"
-                    name="password"
-                    value={userDetails.password}
-                    onChange={handleChange}
-                  />
-                </Form.Group>
-
-                <Form.Group controlId="formConfirmPassword" className="mt-3">
-                  <Form.Label>Confirm Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    placeholder="Confirm new password"
-                    name="confirmPassword"
-                    value={userDetails.confirmPassword}
-                    onChange={handleChange}
-                  />
-                </Form.Group>
-
-                <div className="d-flex justify-content-between mt-4">
-                  <Button variant="primary" type="submit">
-                    Update Profile
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      navigate("/"); // Navigate back to home or dashboard
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </Form>
-            </Card.Body>
-          </Card>
+          <div
+            style={{
+              borderRadius: "12px",
+              boxShadow: "2px 2px 15px 10px rgba(0,0,0,0.06)",
+              border: "none",
+            }}
+          >
+            <div className="px-4 py-3">
+              {activeSection === "profile" && <ProfileSection />}
+              {activeSection === "address" && <AddressSection />}
+              {activeSection === "wishlist" && <WishlistSection />}
+              {activeSection === "orders" && <OrderSection />}
+              {activeSection === "downloads" && <DownloadSection />}
+            </div>
+          </div>
         </Col>
       </Row>
     </Container>

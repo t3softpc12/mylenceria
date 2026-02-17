@@ -1,136 +1,276 @@
-import React from "react";
+import React, { forwardRef, useImperativeHandle, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { FaTrashAlt, FaTimes } from "react-icons/fa";
-import { Link } from "react-router-dom";
-import { Modal } from "react-bootstrap";
-import Checkout from "../components/Checkout";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { useAuth } from "../context/AuthContext";
 
-const Cart = ({ showCart, toggleCart }) => {
-  const { cart, removeFromCart, addToCart, removeQuantity, toggleSelect } = useCart();
+const Cart = forwardRef((props, ref) => {
+  const { cart, removeFromCart, updateCart } = useCart();
+  const [openCart, setOpenCart] = useState(false);
+  const navigate = useNavigate();
+  const { user, openLoginPopup } = useAuth();  // ← get user here
 
-  if (!showCart) return null;
+  useImperativeHandle(ref, () => ({
+  openCartDrawer: () => {
+    setOpenCart(true);
+  }
+}));
 
-  // 🧮 Filter selected items for price calculations
+  const closeCart = () => setOpenCart(false);
+
+  // ---------------- SELECTED ITEMS & STOCK CHECK ----------------
   const selectedItems = cart.filter((item) => item.selected);
-  const subtotal = selectedItems.reduce(
-    (sum, item) =>
-      sum +
-      (item.special_price ? parseInt(item.special_price.replace(/[₹,]/g, "")) * item.qty : 0),
-    0
-  );
+  // console.log("Selected Items in Cart:", selectedItems);
 
-  const originalTotal = selectedItems.reduce(
-    (sum, item) =>
-      sum +
-      (item.customer_mrp
-        ? parseInt(item.customer_mrp.replace(/[₹,]/g, "")) * item.qty
-        : parseInt(item.special_price.replace(/[₹,]/g, "")) * item.qty),
-    0
-  );
+  // Find out of stock selected items
+  const outOfStockItems = selectedItems.filter((item) => item.stock < 1);
+  const hasOutOfStock = outOfStockItems.length > 0;
 
-  const savings = originalTotal - subtotal;
-  const savingPercent = originalTotal
-    ? ((savings / originalTotal) * 100).toFixed(1)
-    : 0;
+  // ---------------- PRICE CALCULATION ----------------
+const getBestPrice = (item) => {
+  if (item.special_price !== null && item.special_price > 0) return item.special_price;
+  if (item.discount_price > 0) return item.discount_price;
+  return item.customer_mrp;
+};
 
-  const convenienceCharge = selectedItems.length > 0 ? 10 : 0;
-  const shipping = 0;
-  const totalPayable =
-    subtotal > 0 ? subtotal + convenienceCharge + shipping : 0;
+const subtotal = selectedItems.reduce((sum, item) => sum + getBestPrice(item) * item.qty, 0);
+
+const originalTotal = selectedItems.reduce((sum, item) => sum + item.customer_mrp * item.qty, 0);
+
+const savings = originalTotal - subtotal;
+const savingPercent = originalTotal > 0 ? Math.round((savings / originalTotal) * 100) : 0;
+
+const totalPayable = subtotal > 0 ? subtotal : 0;
+
+  // ---------------- REMOVE ALL OUT OF STOCK ----------------
+  const removeOutOfStockItems = () => {
+    outOfStockItems.forEach((item) => removeFromCart(item.id));
+  };
 
   return (
     <>
-      <Modal
-        show={showCart}
-        onHide={toggleCart}
-        size="lg"
-        centered
-        className="cart-sidebar hide-scrollbar border-0 "
+      {/* -------------- OVERLAY -------------- */}
+      {openCart && (
+        <div
+          onClick={closeCart}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 2000,
+          }}
+        ></div>
+      )}
+
+      {/* -------------- RIGHT SIDE CART DRAWER -------------- */}
+      {/* <div
         style={{
           position: "fixed",
           top: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 2000,
-          width: "25vw",
-          maxWidth: "100%",
-          transition: "right 0.3s ease-in-out",
-          backgroundColor: "#fff",
+          right: openCart ? "0" : "-30vw", // slide animation
+          width: "24vw",
+          height: "100vh",
+          background: "#fff",
+          boxShadow: "0 0 15px rgba(0,0,0,0.3)",
+          transition: "right 0.4s ease-in-out",
+          zIndex: 3000,
+          overflowY: "auto",
         }}
-      >
-        <Modal.Body className="" style={{ padding: "0" }}>
-          <div className="p-3" style={{ height: "100%", overflowY: "auto" }}>
-            {/* Header */}
-            <div className="d-flex justify-content-between align-items-center mb-3 ">
-              <h4 className="m-0">Cart </h4>
-              <button className="btn" onClick={toggleCart}>
-                <FaTimes />
+        className="hide-scrollbar"
+      > */}
+
+      <div
+  style={{
+    position: "fixed",
+    top: 0,
+    right: openCart ? "0" : "-30vw",
+    width: "24vw",
+    height: "100vh",
+    background: "#fff",
+    boxShadow: "0 0 15px rgba(0,0,0,0.3)",
+    transition: "right 0.4s ease-in-out",
+    zIndex: 3000,
+    display: "flex",
+    flexDirection: "column"   // IMPORTANT
+  }}
+>
+
+        {/* Header */}
+        <div className="d-flex justify-content-between align-items-center p-3 border-bottom">
+          <h4 className="m-0">Cart ({cart.length})</h4>
+          <FaTimes size={20} onClick={closeCart} style={{ cursor: "pointer" }} />
+        </div>
+
+        {/* Cart Items */}
+        <div className="p-3 flex-grow-1 overflow-auto">
+          {cart.length === 0 ? (
+            <div className="d-flex flex-column align-items-center justify-content-center py-5">
+              <div
+                style={{
+                  width: 90,
+                  height: 90,
+                  borderRadius: "50%",
+                  background: "#f5f7fa",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 16,
+                }}
+              >
+                <i
+                  className="fa fa-shopping-cart"
+                  style={{ fontSize: 36, color: "#9aa4b2" }}
+                />
+              </div>
+
+              <h5 className="fw-semibold mb-2">Your cart is empty</h5>
+
+              <p className="text-muted text-center mb-4" style={{ maxWidth: 260 }}>
+                Looks like you haven’t added anything to your cart yet.
+              </p>
+
+            <button
+                className="btn bg-pink px-4"
+                onClick={() => {
+                  closeCart();          // close drawer
+                  navigate("/shop");   // navigate
+                }}
+              >
+                Continue Shopping
               </button>
             </div>
-
-            {/* Cart Items */}
-            {cart.map((item) => (
-              <div
-                key={item.id}
-                className="border rounded p-3 mb-3 position-relative"
-                style={{ backgroundColor: "#fff" }}
-              >
-                {/* ✅ Checkbox at top-right corner */}
-                <div
-                  className="position-absolute"
-                  style={{
-                    top: "10px",
-                    right: "10px",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={item.selected || false}
-                    onChange={() => toggleSelect(item.id)}
-                    className="form-check-input"
-                    style={{
-                      accentColor: "#ff7f73", // your theme pink instead of default blue
-                      cursor: "pointer",
-                    }}
-                  />
+          ) : (
+            <>
+              {/* OUT OF STOCK WARNING BANNER */}
+              {hasOutOfStock && (
+                <div className="alert alert-danger mb-3 p-3">
+                  <strong>{outOfStockItems.length} selected item(s) are out of stock:</strong>
+                  <ul className="mt-2 mb-0 ps-4">
+                    {outOfStockItems.map((item) => (
+                      <li key={item.id} className="small">
+                        {item.product_name || item.productname} 
+                        {item.size && ` (Size: ${item.size})`}
+                        {item.color && `, Color: ${item.color}`}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    className="btn btn-sm btn-outline-danger mt-2 w-100"
+                    onClick={removeOutOfStockItems}
+                  >
+                    Remove out of stock items
+                  </button>
                 </div>
+              )}
 
-                <div className="d-flex gap-3">
+              {/* Cart Items */}
+          {cart.map((item) => {
+            // Determine the best current price
+            const hasSpecial = item.special_price !== null && item.special_price > 0;
+            const hasDiscount = item.discount_price > 0;
+            const displayPrice = hasSpecial 
+              ? item.special_price 
+              : hasDiscount 
+                ? item.discount_price 
+                : item.customer_mrp;
+
+            const showStrikethrough = hasSpecial || hasDiscount;
+
+            return (
+                  <div
+                    key={item.id}
+                    className={`border rounded p-3 mb-3 position-relative ${
+                      item.stock < 1 ? "opacity-75" : ""
+                    }`}
+                    style={{ backgroundColor: "#fff" }}
+                  >
+                <input
+                  type="checkbox"
+                  checked={item.selected || false}
+                      onChange={(e) =>
+                        updateCart(item.id, { selected: e.target.checked ? 1 : 0 })
+                      }
+                      disabled={item.stock < 1}
+                      style={{
+                        position: "absolute",
+                        top: "16px",
+                        right: "16px",
+                        accentColor: "#ff4d6d",
+                      }}
+                    />
+
+                    <div style={{ display: "flex", gap: "16px" }}>
                   <img
-                    src={item.img1}
-                    alt={item.productname}
-                    width="100"
+                    src={item.image || item.img1}
+                    alt={item.product_name || item.productname}
+                    // width="100"
                     height="100"
                     style={{ objectFit: "cover", borderRadius: "8px" }}
                   />
 
-                  <div className="flex-grow-1 d-flex flex-column justify-content-between">
-                    <div>
-                      <p className="fw-semibold mb-1">{item.productname}</p>
-                      <p className="text-muted small mb-1">Size: {item.size}</p>
-                      <p className="text-muted small mb-2">Color: {item.color}</p>
+                  <div className="flex-grow-1">
+                        {item.stock < 1 && (
+                          <span className="badge bg-danger px-3 mb-2 d-block">Out of stock</span>
+                        )}
 
-                      {/* Price */}
-                      <p className="mb-2">
-                        <span className="text-decoration-line-through text-muted me-2">
-                          {item.customer_mrp}
-                        </span>
-                        <span className="fw-bold text-dark">{item.special_price}</span>
+                                        <p className="fw-semibold mb-1">{item.product_name || item.productname}</p>
+                    {(item.size || item.color) && (
+                      <p className="text-muted small mb-1">
+                        {item.size && `Size: ${item.size}`}
+                        {item.size && item.color && " | "}
+                        {item.color && `Color: ${item.color}`}
                       </p>
+                    )}
+
+                    {/* PRICE DISPLAY */}
+                    <div className="mb-2">
+                      {showStrikethrough && (
+                        <del className="text-muted me-2 small">₹{item.customer_mrp}</del>
+                      )}
+
+                      <span className="fw-bold text-dark fs-6">
+                        ₹{displayPrice}
+                      </span>
+
+                      {/* Special Offer Badge */}
+                      {hasSpecial && (
+                            <span
+                              style={{
+                                background: "#dc3545",
+                                color: "white",
+                                fontSize: "11px",
+                                padding: "2px 1px",
+                                borderRadius: "12px",
+                                marginLeft: "8px",
+                              }}
+                            >
+                              SPECIAL
+                        </span>
+                      )}
                     </div>
 
-                    {/* Quantity Controls */}
-                    <div className="d-flex align-items-center gap-2 mt-2">
+                        {/* Quantity */}
+                        <div style={{ display: "flex", alignItems: "center"}}>
                       <button
-                        className="btn btn-outline-dark btn-sm px-2 py-0"
-                        onClick={() => removeQuantity(item.id)}
+                            className="btn btn-outline-secondary btn-sm rounded-circle"
+                        disabled={item.qty <= 1}
+                        onClick={() => updateCart(item.id, { qty: item.qty - 1 })}
+                            style={{ width: "25px", height: "25px", padding: 0 }}
                       >
                         -
                       </button>
-                      <span>{item.qty}</span>
+                          <span style={{ fontWeight: 600, minWidth: "30px", textAlign: "center" }}>
+                            {item.qty}
+                          </span>
                       <button
-                        className="btn btn-outline-dark btn-sm px-2 py-0"
-                        onClick={() => addToCart(item)}
+                            className="btn btn-outline-secondary btn-sm rounded-circle"
+                        disabled={item.qty >= item.stock}
+                        onClick={() => updateCart(item.id, { qty: item.qty + 1 })}
+                            style={{ width: "25px", height: "25px", padding: 0 }}
                       >
                         +
                       </button>
@@ -138,86 +278,117 @@ const Cart = ({ showCart, toggleCart }) => {
                   </div>
                 </div>
 
-                {/* 🗑️ Delete button — bottom-right corner */}
-                <div
-                  className="position-absolute"
-                  style={{
-                    bottom: "10px",
-                    right: "10px",
-                  }}
+                {/* Delete */}
+                <button
+                  onClick={() => removeFromCart(item.id)}
+                      style={{
+                        position: "absolute",
+                        bottom: "16px",
+                        right: "16px",
+                        background: "none",
+                        border: "none",
+                        color: "#ff4d6d",
+                        cursor: "pointer",
+                      }}
                 >
-                  <button
-                    className="btn btn-sm text-danger"
-                    onClick={() => removeFromCart(item.id)}
-                    title="Remove from cart"
-                  >
-                    <FaTrashAlt />
-                  </button>
-                </div>
+                      <FaTrashAlt size={18} />
+                </button>
               </div>
-            ))}
+            );
+          })}
+            </>
+          )}
+        </div>
 
-            {/* Price Details */}
-            <div className="border-top pt-3" style={{ fontSize: "0.9vw" }}>
-              <h6 className="fw-bold mb-2">PRICE DETAILS</h6>
+        {/* Sticky Price Details + Checkout Button */}
+{cart.length > 0 && (
+  <div
+    className="border-top bg-white shadow"
+    style={{ zIndex: 5 }}
+  >
+    <div className="p-3 p-md-4">
 
-              {selectedItems.length === 0 ? (
-                <p className="text-muted small">Select items to see total.</p>
-              ) : (
-                <>
-                  <div className="d-flex justify-content-between">
-                    <span>Total M.R.P :</span>
-                    <span>₹{originalTotal.toLocaleString()}</span>
-                  </div>
-                  <div className="d-flex justify-content-between text-danger">
-                    <span>Savings on M.R.P :</span>
-                    <span>(-) ₹{savings.toLocaleString()}</span>
-                  </div>
-                  <div className="d-flex justify-content-between">
-                    <span>Saving % :</span>
-                    <span className="text-success fw-semibold">
-                      {savingPercent}% OFF
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between">
-                    <span>Sub-total :</span>
-                    <span>₹{subtotal.toLocaleString()}</span>
-                  </div>
-                  <div className="d-flex justify-content-between">
-                    <span>Shipping :</span>
-                    <span>{shipping === 0 ? "FREE" : `₹${shipping}`}</span>
-                  </div>
-                  <div className="d-flex justify-content-between">
-                    <span>Convenience charges :</span>
-                    <span>₹{convenienceCharge}</span>
-                  </div>
+      {/* <h6 className="fw-semibold mb-3 text-uppercase small text-muted">
+        Price Details
+      </h6> */}
 
-                  <hr />
-                  <div className="d-flex justify-content-between fw-bold">
-                    <span>Net Payable :</span>
-                    <span>₹{totalPayable.toLocaleString()}</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Checkout */}
-            <div className="mt-4">
-              <Link
-                to="/checkout"
-                state={{ selectedItems }}
-                className={`btn rounded-pill px-4 py-2 w-100 ${
-                  selectedItems.length > 0 ? "btn-dark" : "btn-secondary disabled"
-                }`}
-              >
-                Continue to Checkout
-              </Link>
-            </div>
+      {selectedItems.length === 0 ? (
+        <p className="text-muted small mb-3">
+          Select items to see total.
+        </p>
+      ) : (
+        <>
+          <div className="d-flex justify-content-between mb-2 small">
+            <span>Total MRP</span>
+            <span>₹{originalTotal.toLocaleString()}</span>
           </div>
-        </Modal.Body>
-      </Modal>
+
+          <div className="d-flex justify-content-between text-success mb-2 small">
+            <span>Savings</span>
+            <span>
+              -₹{savings.toLocaleString()} ({savingPercent}% OFF)
+            </span>
+          </div>
+
+          <div className="d-flex justify-content-between mb-1 small">
+            <span>Sub-total</span>
+            <span>₹{subtotal.toLocaleString()}</span>
+          </div>
+
+          <hr />
+
+          <div className="d-flex justify-content-between fw-bold fs-5 mb-3">
+            <span>Net Payable</span>
+            <span>₹{totalPayable.toLocaleString()}</span>
+          </div>
+        </>
+      )}
+
+      {/* Checkout Button */}
+      <button
+        onClick={() => {
+          if (selectedItems.length === 0 || hasOutOfStock) return;
+
+          if (!user) {
+            openLoginPopup();
+            closeCart();
+            return;
+          }
+
+          closeCart();
+          navigate("/checkout", { state: { selectedItems } });
+        }}
+        className={`btn w-100 fw-semibold rounded-pill shadow ${
+          selectedItems.length > 0 && !hasOutOfStock
+            ? "btn-danger"
+            : "btn-secondary disabled"
+        }`}
+      >
+        {hasOutOfStock
+          ? "Remove Out-of-Stock Items"
+          : "Proceed to Checkout"}
+      </button>
+
+      {/* Continue Shopping */}
+      {/* <div className="text-center mt-3">
+        <button
+          onClick={() => {
+            closeCart();
+            navigate("/shop");
+          }}
+          className="btn btn-link text-danger text-decoration-none small"
+        >
+          Continue Shopping →
+        </button>
+      </div> */}
+
+    </div>
+  </div>
+)}
+
+      </div>
     </>
   );
-};
+});
 
 export default Cart;

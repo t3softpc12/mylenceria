@@ -1,49 +1,54 @@
 import React, { useState, useEffect, useRef } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { Container, Form, FormControl, Button, Navbar } from "react-bootstrap";
-import { FaSearch, FaHeart, FaShoppingCart, FaBell, FaUser } from "react-icons/fa";
+import {
+  FaSearch,
+  FaHeart,
+  FaShoppingCart,
+  FaBell,
+  FaUser,
+} from "react-icons/fa";
 import logo from "../assets/Logo.svg";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext"; // Cart Context
 import Cart from "../pages/Cart";
-import Profile from "./Profile";
-import axios from "axios"; // Axios for API requests
+import ValidateUser from "./ValidateUser";
+import { useAuth } from "../context/AuthContext";
+import { useProducts } from "../context/ProductContext";
+import { useSearch } from "../context/SearchContext";
+import { useWishlist } from "../context/WishlistContext";
+// import { toast } from "react-toastify";
 
-const NavBar = () => {
+const NavBar = ({}) => {
+  const { categories, selectedCategory, setSelectedCategory } = useProducts();
   const [showCart, setShowCart] = useState(false); // Cart modal state
-  const [menuItems, setMenuItems] = useState([]); // State to store dynamic menu items
-  const [loading, setLoading] = useState(true); // State to show loading state
   const navigate = useNavigate();
+  const { wishlist, loadWishlist } = useWishlist(); // ← Get wishlist
   const { cart } = useCart(); // Use Cart context
+  const cartRef = useRef();
   const profileRef = useRef();
-    const [isLoggedIn, setIsLoggedIn] = useState(false); // Track login state
+  const { user, openLoginPopup } = useAuth();
+  const {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    searchLoading,
+    showDropdown,
+    setShowDropdown,
+    clearSearch,
+  } = useSearch();
 
+  // console.log("NavBar received categories:", categories);
+  // console.log("NavBar categories length:", categories?.length || 0);
+  // console.log("NavBar selectedCategory:", selectedCategory);
 
-  // Fetch categories from API on component mount
   useEffect(() => {
-    axios.get(import.meta.env.VITE_FETCH_CATEGORY) // API URL from VITE env file
-      .then((response) => {
-        const categories = response.data.map((category, index) => ({
-          id: index + 1,
-          label: category,
-          path: "/shop", // Assuming all paths lead to /shop, you can modify this logic if needed
-          hasMegaMenu: true, // You can adjust this based on your categories
-        }));
-        setMenuItems(categories);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error fetching categories:", error);
-        setLoading(false);
-      });
+    const savedCategory = localStorage.getItem("selectedCategory");
+    if (savedCategory) {
+      setSelectedCategory(savedCategory);
+    }
   }, []);
 
-  const handleMenuClick = (item) => {
-    navigate(item.path);
-    console.log("Navigating to:", item.path);
-  };
-
-  // Cart Modal toggle
   const toggleCart = () => {
     setShowCart(!showCart);
   };
@@ -51,6 +56,10 @@ const NavBar = () => {
   const handleProfileClick = () => {
     profileRef.current?.openPopup();
   };
+
+  useEffect(() => {
+    loadWishlist();
+  }, []);
 
   return (
     <>
@@ -67,32 +76,155 @@ const NavBar = () => {
         }}
       >
         <Navbar bg="light" expand="lg" className="border-bottom py-2">
-          <Container fluid className="px-4 d-flex justify-content-between align-items-center">
+          <Container
+            fluid
+            className="px-4 d-flex justify-content-between align-items-center"
+          >
             {/* Logo */}
             <Navbar.Brand href="/">
               <img src={logo} alt="MyLenceria" height="35" className="me-2" />
             </Navbar.Brand>
 
             {/* Search */}
-            <Form className="d-flex mx-auto w-50 position-relative">
+            <Form className="d-flex position-relative">
               <FormControl
                 type="search"
-                placeholder="Search for... Panties"
-                className="rounded-pill ps-4 pe-5"
-                style={{ border: "1px solid #ddd", boxShadow: "none", height: "40px" }}
+                placeholder="Search for Bras, Panties, Nightwear, Brands..."
+                className="rounded-pill ps-4 pe-5 border-0 shadow-sm"
+                style={{ height: "48px", width: "30vw", fontSize: "15px" }}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setShowDropdown(true)}
+                // Hide dropdown on blur with small delay so click works
+                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && searchQuery.trim()) {
+                    clearSearch();
+                    navigate(`/shop?search=${encodeURIComponent(searchQuery)}`);
+                  }
+                }}
               />
-              <Button variant="link" className="position-absolute end-0 top-0 h-100 text-dark pe-3" style={{ fontSize: "16px" }}>
-                <FaSearch />
-              </Button>
+              <FaSearch
+                style={{
+                  position: "absolute",
+                  right: "18px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#999",
+                  fontSize: "18px",
+                  pointerEvents: "none",
+                }}
+              />
             </Form>
+
+            {/* Live Search Dropdown */}
+            {showDropdown && searchQuery.length > 1 && (
+              <div
+                className="position-absolute bg-white shadow-lg rounded-3 mt-2 overflow-hidden"
+                style={{
+                  width: "100%",
+                  maxHeight: "70vh",
+                  overflowY: "auto",
+                  zIndex: 3000,
+                  border: "1px solid #eee",
+                }}
+              >
+                {searchLoading ? (
+                  <div className="p-4 text-center text-muted">
+                    <div
+                      className="spinner-border spinner-border-sm me-2"
+                      role="status"
+                    ></div>
+                    Searching...
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="p-4 text-center text-muted">
+                    No products found
+                  </div>
+                ) : (
+                  <>
+                    {searchResults.map((product) => (
+                      <div
+                        key={product.productid}
+                        className="d-flex align-items-center p-3 mt-5 border-bottom hover-bg-light"
+                        style={{ cursor: "pointer" }}
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // Prevent blur before click
+                          clearSearch();
+                          navigate(`/detail/${product.productid}`);
+                        }}
+                      >
+                        <img
+                          src={
+                            product.images?.cover ||
+                            product.images?.img1 ||
+                            "/placeholder.jpg"
+                          }
+                          alt={product.productname}
+                          style={{
+                            width: "60px",
+                            height: "60px",
+                            objectFit: "cover",
+                            borderRadius: "8px",
+                            marginRight: "16px",
+                          }}
+                        />
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold text-dark">
+                            {product.productname}
+                          </div>
+                          <div className="text-muted small">
+                            {product.brand}
+                          </div>
+                        </div>
+                        <div className="text-end">
+                          {product.discount_price ? (
+                            <>
+                              <div className="text-danger fw-bold">
+                                ₹{product.discount_price}
+                              </div>
+                              <del className="text-muted small">
+                                ₹{product.customer_mrp}
+                              </del>
+                            </>
+                          ) : (
+                            <div className="text-danger fw-bold">
+                              ₹{product.customer_mrp}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* View All Results Link */}
+                    <div
+                      className="p-3 text-center bg-light text-danger fw-semibold"
+                      style={{ cursor: "pointer" }}
+                      onMouseDown={() => {
+                        clearSearch();
+                        navigate(
+                          `/shop?search=${encodeURIComponent(searchQuery)}`,
+                        );
+                      }}
+                    >
+                      View all results for "{searchQuery}" →
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Right icons */}
             <div className="d-flex align-items-center">
-              <Button variant="danger" className="rounded-pill px-3 me-4 fw-semibold" style={{ backgroundColor: "#ff7f73", border: "none" }}>
-                Find Your Fit
+              <Button
+                variant="danger"
+                className="rounded-pill px-3 me-4 fw-semibold"
+                style={{ backgroundColor: "#ff7f73", border: "none" }}
+              >
+                New launch 
               </Button>
 
-              <div className="d-flex align-items-center gap-5 fs-5 text-dark">
+              <div className="d-flex align-items-center gap-4 fs-5 text-dark">
                 <div className="d-flex align-items-center gap-5 fs-5 text-dark">
                   <div
                     className="d-flex align-items-center"
@@ -100,16 +232,58 @@ const NavBar = () => {
                     onClick={handleProfileClick}
                   >
                     <FaUser size={22} />
-                    <Profile ref={profileRef} /> {/* Profile dropdown */}
-                    <div className="d-flex flex-column lh-1">
-                      <strong style={{ fontSize: "13px" }}>{isLoggedIn ? "My Account" : "Hello guest!"}</strong>
-                    </div>
+                    <ValidateUser ref={profileRef} />{" "}
+                    {/* ValidateUser dropdown */}
+                    <div className="d-flex flex-column lh-1"></div>
                   </div>
+                </div>
+                <div
+                  className="position-relative"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => {
+                    if (user) {
+                      // Logged in → go to wishlist page
+                      navigate("/account?section=wishlist");
+                    } else {
+                      openLoginPopup(); 
+                      return;
+                    }
+                  }}
+                >
+                  <FaHeart size={22} />
+
+                  {/* Badge - only show if items exist */}
+
+                  
+                  {user && wishlist.length > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "-5px",
+                        right: "-12px",
+                        backgroundColor: "#f1274cff",
+                        color: "#fff",
+                        borderRadius: "50%",
+                        width: "18px",
+                        height: "18px",
+                        fontSize: "10px",
+                        fontWeight: "bold",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {wishlist.length}
+                    </div>
+                  )}
                 </div>
 
                 {/* Cart Icon with Count */}
                 <div className="position-relative">
-                  <FaShoppingCart className="cursor-pointer" onClick={toggleCart} />
+                  <FaShoppingCart
+                    className="cursor-pointer"
+                    onClick={() => cartRef.current.openCartDrawer()}
+                  />
                   {/* Cart Count Badge */}
                   {cart.length > 0 && (
                     <div
@@ -129,148 +303,51 @@ const NavBar = () => {
                     </div>
                   )}
                 </div>
-                <FaHeart />
-                <FaBell />
+                {/* <FaBell /> */}
               </div>
             </div>
           </Container>
         </Navbar>
 
         {/* === Bottom Menu Line === */}
-        <div className="border-top border-bottom bg-white w-100 position-relative" style={{ zIndex: 1000 }}>
-          <Container fluid className="d-flex flex-wrap justify-content-center align-items-center gap-4 py-2">
-            {/* Static menu items: New Arrivals and Explore */}
-            <div className="nav-item position-relative">
-              <button
-                onClick={() => handleMenuClick({ path: "/shop", label: "New Arrivals" })}
-                className="bg-transparent border-0 text-decoration-none text-gradient fw-semibold"
-                style={{ fontSize: "14px", cursor: "pointer" }}
-              >
-                New Arrivals
-              </button>
-            </div>
-
-            <div className="nav-item position-relative">
-              <button
-                onClick={() => handleMenuClick({ path: "/shop", label: "Explore" })}
-                className="bg-transparent border-0 text-decoration-none text-gradient fw-semibold"
-                style={{ fontSize: "14px", cursor: "pointer" }}
-              >
-                Explore
-              </button>
-            </div>
-
-            {/* Dynamically fetched categories */}
-            {loading ? (
+        <div
+          className="border-top border-bottom bg-white w-100 position-relative"
+          style={{ zIndex: 1000 }}
+        >
+          <Container
+            fluid
+            className="d-flex flex-wrap justify-content-center align-items-center gap-4 py-2"
+          >
+            {categories.length === 0 ? (
               <span>Loading categories...</span>
             ) : (
-              menuItems.map((item) => (
-                <div key={item.id} className="nav-item position-relative">
+              categories.map((category, index) => (
+                <div
+                  key={category.categoryName || index}
+                  className="nav-item position-relative"
+                >
                   <button
-                    onClick={() => handleMenuClick(item)}
-                    className={`bg-transparent border-0 text-decoration-none ${item.id === 1 || item.id === 2 ? "text-gradient fw-semibold" : "text-dark"}`}
+                    onClick={() => {
+                      setSelectedCategory(category.categoryName);
+                      localStorage.setItem(
+                        "selectedCategory",
+                        category.categoryName,
+                      );
+                      navigate("/shop");
+                    }}
+                    className="bg-transparent border-0 text-decoration-none text-gradient fw-semibold"
                     style={{
                       fontSize: "14px",
-                      borderLeft: item.id === 1 ? "none" : "1px solid #000",
-                      paddingLeft: item.id === 1 ? "0" : "10px",
+                      borderLeft: index === 0 ? "none" : "1px solid #000",
+                      paddingLeft: index === 0 ? "0" : "10px",
                       cursor: "pointer",
                     }}
                   >
-                    {item.label}
+                    {category.categoryName}
                   </button>
 
                   {/* Mega Menu logic */}
-                  {item.hasMegaMenu && (
-                    <div className="mega-menu">
-                      <div className="menu-grid">
-                        {/* Column 1 */}
-                        <div>
-                          <h6>BY COLLECTION</h6>
-                          <ul>
-                            <li>Innovation</li>
-                            <li>Bra Tops & Corset <span className="badge-new">NEW</span></li>
-                            <li>Bridal Bras <span className="badge-hot">HOT SELLING</span></li>
-                            <li>Shimmering Secrets <span className="badge-bridal">BRIDAL</span></li>
-                            <li>Forever Yours <span className="badge-bridal">BRIDAL</span></li>
-                            <li>Lingerie Sets</li>
-                            <li>Miracle Bras</li>
-                            <li>Seamless Bra</li>
-                            <li>La Flamme <span className="badge-bridal">BRIDAL</span></li>
-                            <li>Marshmallow Bra</li>
-                            <li>@ Work</li>
-                          </ul>
-                        </div>
-
-                        {/* Column 2 */}
-                        <div>
-                          <h6>BY PREFERENCES</h6>
-                          <ul>
-                            <li>Bra Solutions</li>
-                            <li>Padded Bra</li>
-                            <li>Non Padded Bra</li>
-                            <li>Non Wired Bra</li>
-                            <li>Wired Bra</li>
-                            <li>Front Open Bra</li>
-                            <li>Push Up Bra</li>
-                            <li>Full Coverage Bra</li>
-                            <li>Medium Coverage Bra</li>
-                            <li>Low Coverage Bra</li>
-                            <li>Solid Bra</li>
-                            <li>Printed Bra</li>
-                            <li>Pack of 2 <span className="badge-new">NEW</span></li>
-                          </ul>
-                        </div>
-
-                        {/* Column 3 */}
-                        <div>
-                          <h6>BY STYLE</h6>
-                          <ul>
-                            <li>T-Shirt Bras</li>
-                            <li>Curvy / Super Support</li>
-                            <li>Strapless Bras</li>
-                            <li>Minimiser Bras</li>
-                            <li>Backless / Transparent Bras</li>
-                            <li>Home Bras <span className="badge-new">NEW</span></li>
-                            <li>Slip On Bra / Bralette</li>
-                            <li>Lace Bra</li>
-                            <li>Maternity Bras</li>
-                            <li>No Sag Bra</li>
-                            <li>Pretty Back Bras</li>
-                            <li>Teens / Beginner Bra</li>
-                            <li>OH SO SEXY!</li>
-                            <li>Sports Bras</li>
-                            <li>Blouze Bra</li>
-                            <li>Post Surgical / Mastectomy</li>
-                          </ul>
-                        </div>
-
-                        {/* Column 4 */}
-                        <div>
-                          <h6>BY BRANDS</h6>
-                          <ul>
-                            <li>Zivame</li>
-                            <li>Rosaline By Zivame</li>
-                            <li>Marks & Spencer</li>
-                            <li>Amante</li>
-                            <li>Triumph</li>
-                          </ul>
-                        </div>
-
-                        {/* Column 5 */}
-                        <div>
-                          <h6>BY OCCASION</h6>
-                          <ul>
-                            <li>Summer <span className="badge-hot">HOT SELLING</span></li>
-                            <li>Everyday</li>
-                            <li>Holiday / Vacation</li>
-                            <li>Bridal <span className="badge-hot">HOT SELLING</span></li>
-                            <li>Party <span className="badge-hot">HOT SELLING</span></li>
-                            <li>Luxe</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {category.hasMegaMenu && <div className="mega-menu"></div>}
                 </div>
               ))
             )}
@@ -279,7 +356,8 @@ const NavBar = () => {
       </div>
 
       {/* === Cart Modal === */}
-      <Cart showCart={showCart} toggleCart={toggleCart} />
+      {/* <Cart showCart={showCart} toggleCart={toggleCart} /> */}
+      <Cart ref={cartRef} />
     </>
   );
 };
